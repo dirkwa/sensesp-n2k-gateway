@@ -1,0 +1,20 @@
+{
+  "name": "SensESP N2K Gateway",
+  "version": "0.1.0",
+  "description": "NMEA 2000 candump-over-TCP gateway for SensESP — streams raw CAN frames to canboatjs via TCP",
+  "keywords": "nmea2000, n2k, can, canbus, twai, candump, signalk, gateway, esp32, esp32-p4, sensesp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dirkwa/sensesp-n2k-gateway.git"
+  },
+  "license": "MIT",
+  "frameworks": ["arduino", "espidf"],
+  "platforms": ["espressif32"],
+  "dependencies": {
+    "SignalK/SensESP": ">=3.3.0"
+  },
+  "build": {
+    "srcFilter": ["+<*>"],
+    "includeDir": "src"
+  }
+}

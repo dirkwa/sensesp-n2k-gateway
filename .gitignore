@@ -1,0 +1,6 @@
+.pio/
+build/
+sdkconfig.*_*
+managed_components/
+dependencies.lock
+CMakeLists.txt
