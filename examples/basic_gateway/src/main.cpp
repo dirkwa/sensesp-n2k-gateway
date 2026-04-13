@@ -10,8 +10,9 @@
  * them on the bus (bidirectional).
  *
  * Hardware:
- *   - Waveshare ESP32-P4-WIFI6-POE-ETH (Ethernet)
- *   - SN65HVD230 or TJA1051T CAN transceiver on GPIO4 (TX) / GPIO5 (RX)
+ *   - Waveshare ESP32-P4-WIFI6-Touch-LCD-7B (built-in TJA1051T CAN
+ *     transceiver on GPIO22/21, PH2.0 connector for CANH/CANL)
+ *   - Also works on ESP32-P4-WIFI6-POE-ETH with external transceiver
  *   - NMEA 2000 backbone connection with 120-ohm termination
  */
 
@@ -32,12 +33,8 @@ void setup() {
                  ->enable_ota("n2k-gw-ota")
                  ->get_app();
 
-  // TWAI pins — connect to CAN transceiver
-  TwaiReceiverConfig twai_cfg;
-  twai_cfg.tx_pin = GPIO_NUM_4;
-  twai_cfg.rx_pin = GPIO_NUM_5;
-
-  auto* receiver = new TwaiReceiver(twai_cfg);
+  // Built-in CAN transceiver on the Touch-LCD-7B (GPIO22 TX, GPIO21 RX)
+  auto* receiver = new TwaiReceiver(TwaiReceiverConfig::waveshare_touch_lcd_7b());
   auto* transmitter = new TwaiTransmitter();
   auto* server = new CandumpTcpServer(receiver, transmitter);
 

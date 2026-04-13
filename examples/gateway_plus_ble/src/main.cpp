@@ -35,11 +35,7 @@ void setup() {
                  ->get_app();
 
   // --- NMEA 2000 gateway ---
-  TwaiReceiverConfig twai_cfg;
-  twai_cfg.tx_pin = GPIO_NUM_4;
-  twai_cfg.rx_pin = GPIO_NUM_5;
-
-  auto* receiver = new TwaiReceiver(twai_cfg);
+  auto* receiver = new TwaiReceiver(TwaiReceiverConfig::waveshare_touch_lcd_7b());
   auto* transmitter = new TwaiTransmitter();
   auto* n2k_server = new CandumpTcpServer(receiver, transmitter);
 

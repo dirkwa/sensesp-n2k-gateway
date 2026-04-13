@@ -14,10 +14,16 @@
 namespace sensesp {
 
 struct TwaiReceiverConfig {
-  gpio_num_t tx_pin = GPIO_NUM_4;
-  gpio_num_t rx_pin = GPIO_NUM_5;
+  gpio_num_t tx_pin = GPIO_NUM_22;
+  gpio_num_t rx_pin = GPIO_NUM_21;
   uint32_t bitrate = 250000;  // NMEA 2000 standard
   size_t rx_queue_depth = 64;
+
+  /// Factory preset for the Waveshare ESP32-P4-WIFI6-Touch-LCD-7B
+  /// which has an on-board TJA1051T CAN transceiver on GPIO22/21.
+  static TwaiReceiverConfig waveshare_touch_lcd_7b() {
+    return {.tx_pin = GPIO_NUM_22, .rx_pin = GPIO_NUM_21};
+  }
 };
 
 /// Reads CAN frames from the TWAI peripheral and emits them as

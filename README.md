@@ -75,13 +75,28 @@ Both gateways run on a single ESP32-P4 board. See [examples/gateway_plus_ble/](e
 
 ## Hardware
 
+### Waveshare ESP32-P4-WIFI6-Touch-LCD-7B (recommended)
+
+CAN bus ready out of the box — built-in TJA1051T transceiver with PH2.0 connector for CANH/CANL. Default pin config (`GPIO22` TX, `GPIO21` RX) matches this board.
+
+```cpp
+auto* receiver = new TwaiReceiver(TwaiReceiverConfig::waveshare_touch_lcd_7b());
+```
+
+### Waveshare ESP32-P4-WIFI6-POE-ETH (with external transceiver)
+
+No CAN transceiver on board. Add an SN65HVD230 breakout module connected to any two GPIOs on the 40-pin header.
+
+```cpp
+auto* receiver = new TwaiReceiver({.tx_pin = GPIO_NUM_4, .rx_pin = GPIO_NUM_5});
+```
+
+### General requirements
+
 | Component | Notes |
 |-----------|-------|
-| ESP32-P4 board | Waveshare ESP32-P4-WIFI6-POE-ETH (or any with TWAI) |
-| CAN transceiver | SN65HVD230 (3.3V) or TJA1051T/3 (3.3V logic, 5V bus) |
-| TWAI pins | Any two GPIOs (default: TX=GPIO4, RX=GPIO5) |
-| Bus termination | 120-ohm resistor if at end of backbone |
-| Power | PoE or USB-C |
+| Bus termination | 120-ohm resistor if at end of NMEA 2000 backbone |
+| Power | PoE, USB-C, or NMEA 2000 bus power (with regulator) |
 
 ## Features
 
