@@ -2,14 +2,25 @@
 
 #include <cstdio>
 #include <cstring>
+#include <sys/time.h>
 
 namespace sensesp {
 
 int candump_encode(const TwaiMessage& msg, const char* iface,
                    char* buf, size_t buf_len) {
   // Format: (seconds.microseconds) iface CANID#HEXDATA\n
-  int64_t sec = msg.timestamp_us / 1000000;
-  int64_t usec = msg.timestamp_us % 1000000;
+  // Use wall-clock time (Unix epoch) so SignalK gets valid timestamps.
+  // Falls back to uptime if NTP hasn't synced yet (time < 2020).
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  int64_t sec, usec;
+  if (tv.tv_sec > 1577836800) {  // after 2020-01-01
+    sec = tv.tv_sec;
+    usec = tv.tv_usec;
+  } else {
+    sec = msg.timestamp_us / 1000000;
+    usec = msg.timestamp_us % 1000000;
+  }
 
   // Build the hex data string
   char data_hex[17];  // max 8 bytes = 16 hex chars + null
