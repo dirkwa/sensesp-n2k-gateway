@@ -2,9 +2,11 @@
 #define SENSESP_N2K_GATEWAY_TWAI_RECEIVER_H_
 
 #include <atomic>
+#include <cstdint>
 
 #include "driver/gpio.h"
 #include "driver/twai.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -36,7 +38,22 @@ class TwaiReceiver : public ValueProducer<TwaiMessage> {
   void start();
   void stop();
 
-  uint32_t rx_count() const { return rx_count_; }
+  /// True if we have received at least one frame since boot.
+  bool ever_received() const {
+    return last_rx_us_.load(std::memory_order_relaxed) != 0;
+  }
+
+  /// Seconds since the last received frame. Returns INT64_MAX if no
+  /// frame has ever been received. esp_timer_get_time() returns int64
+  /// microseconds since boot — overflows in ~292,000 years, so no
+  /// rollover concerns. (Was rx_count_ uint32 which overflowed at
+  /// ~20 days of busy N2K traffic.)
+  int64_t seconds_since_last_rx() const {
+    int64_t last = last_rx_us_.load(std::memory_order_relaxed);
+    if (last == 0) return INT64_MAX;
+    return (esp_timer_get_time() - last) / 1000000;
+  }
+
   uint32_t bus_off_count() const { return bus_off_count_; }
 
  private:
@@ -45,7 +62,8 @@ class TwaiReceiver : public ValueProducer<TwaiMessage> {
   TwaiReceiverConfig config_;
   TaskHandle_t rx_task_ = nullptr;
   std::atomic<bool> running_{false};
-  std::atomic<uint32_t> rx_count_{0};
+  // Microseconds-since-boot of last RX frame; 0 = nothing received yet.
+  std::atomic<int64_t> last_rx_us_{0};
   std::atomic<uint32_t> bus_off_count_{0};
 };
 

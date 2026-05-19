@@ -80,7 +80,8 @@ void TwaiReceiver::rx_task(void* arg) {
       TwaiMessage msg;
       msg.frame = frame;
       msg.timestamp_us = esp_timer_get_time();
-      self->rx_count_.fetch_add(1, std::memory_order_relaxed);
+      self->last_rx_us_.store(msg.timestamp_us,
+                              std::memory_order_relaxed);
       self->emit(msg);
     } else if (err == ESP_ERR_TIMEOUT) {
       // No frame received — check for bus-off state.

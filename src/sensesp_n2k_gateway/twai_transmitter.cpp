@@ -47,7 +47,8 @@ void TwaiTransmitter::tx_task(void* arg) {
     if (xQueueReceive(self->tx_queue_, &msg, pdMS_TO_TICKS(100)) == pdTRUE) {
       esp_err_t err = twai_transmit(&msg.frame, pdMS_TO_TICKS(50));
       if (err == ESP_OK) {
-        self->tx_count_.fetch_add(1, std::memory_order_relaxed);
+        self->last_tx_us_.store(esp_timer_get_time(),
+                                std::memory_order_relaxed);
       } else {
         self->tx_fail_count_.fetch_add(1, std::memory_order_relaxed);
         ESP_LOGD(kTag, "TX failed: %s", esp_err_to_name(err));

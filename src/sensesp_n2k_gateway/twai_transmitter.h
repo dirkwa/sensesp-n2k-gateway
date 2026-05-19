@@ -2,8 +2,10 @@
 #define SENSESP_N2K_GATEWAY_TWAI_TRANSMITTER_H_
 
 #include <atomic>
+#include <cstdint>
 
 #include "driver/twai.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -26,7 +28,20 @@ class TwaiTransmitter : public ValueConsumer<TwaiMessage> {
   /// ValueConsumer interface — queues a frame for transmission.
   void set(const TwaiMessage& msg) override;
 
-  uint32_t tx_count() const { return tx_count_; }
+  /// True if we have transmitted at least one frame since boot.
+  bool ever_transmitted() const {
+    return last_tx_us_.load(std::memory_order_relaxed) != 0;
+  }
+
+  /// Seconds since the last transmitted frame. INT64_MAX if none yet.
+  /// Replaces the old uint32_t tx_count_ which would overflow at ~20
+  /// days of busy traffic.
+  int64_t seconds_since_last_tx() const {
+    int64_t last = last_tx_us_.load(std::memory_order_relaxed);
+    if (last == 0) return INT64_MAX;
+    return (esp_timer_get_time() - last) / 1000000;
+  }
+
   uint32_t tx_fail_count() const { return tx_fail_count_; }
 
  private:
@@ -35,7 +50,8 @@ class TwaiTransmitter : public ValueConsumer<TwaiMessage> {
   QueueHandle_t tx_queue_ = nullptr;
   TaskHandle_t tx_task_ = nullptr;
   std::atomic<bool> running_{false};
-  std::atomic<uint32_t> tx_count_{0};
+  // Microseconds-since-boot of last successful TX; 0 = nothing yet.
+  std::atomic<int64_t> last_tx_us_{0};
   std::atomic<uint32_t> tx_fail_count_{0};
 };
 

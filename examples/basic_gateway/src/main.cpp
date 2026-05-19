@@ -43,10 +43,13 @@ void setup() {
   server->start();
 
   event_loop()->onRepeat(5000, [receiver, transmitter, server]() {
+    auto rx_idle = receiver->seconds_since_last_rx();
+    auto tx_idle = transmitter->seconds_since_last_tx();
     ESP_LOGI("N2K",
-             "alive — rx=%u tx=%u tx_fail=%u bus_off=%u clients=%u",
-             (unsigned)receiver->rx_count(),
-             (unsigned)transmitter->tx_count(),
+             "alive — rx_idle=%llds tx_idle=%llds tx_fail=%u "
+             "bus_off=%u clients=%u",
+             (long long)(rx_idle == INT64_MAX ? -1 : rx_idle),
+             (long long)(tx_idle == INT64_MAX ? -1 : tx_idle),
              (unsigned)transmitter->tx_fail_count(),
              (unsigned)receiver->bus_off_count(),
              (unsigned)server->connected_clients());
