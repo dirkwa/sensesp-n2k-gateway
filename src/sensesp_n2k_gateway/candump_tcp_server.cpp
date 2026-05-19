@@ -154,12 +154,19 @@ void CandumpTcpServer::client_task(void* arg) {
 
   // Set socket to non-blocking for the TX side so we can interleave
   // reading inbound lines (RX from client → TX to CAN bus).
-  struct timeval tv = {.tv_sec = 0, .tv_usec = 50000};  // 50ms
-  setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+  struct timeval rcv_tv = {.tv_sec = 0, .tv_usec = 50000};  // 50ms read
+  setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &rcv_tv, sizeof(rcv_tv));
+  // Bounded write timeout — if TCP buffer is full (slow client / congested
+  // SDIO link), drop the frame rather than blocking the candump task.
+  // Blocking here causes SDIO RX queue overflow on the host side.
+  struct timeval snd_tv = {.tv_sec = 0, .tv_usec = 20000};  // 20ms write
+  setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &snd_tv, sizeof(snd_tv));
 
   char line_buf[128];
   int line_pos = 0;
   char encode_buf[128];
+  uint32_t dropped_tx = 0;
+  TickType_t last_drop_log = 0;
 
   while (self->running_.load()) {
     // 1. Drain queued frames → send candump lines to client.
@@ -169,7 +176,21 @@ void CandumpTcpServer::client_task(void* arg) {
                              encode_buf, sizeof(encode_buf));
       if (n > 0) {
         int sent = send(sock, encode_buf, n, MSG_NOSIGNAL);
-        if (sent < 0) goto disconnect;
+        if (sent < 0) {
+          if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // TCP buffer full — drop this frame, keep client connected.
+            dropped_tx++;
+            if (xTaskGetTickCount() - last_drop_log >
+                pdMS_TO_TICKS(5000)) {
+              ESP_LOGW("candump_srv",
+                       "slot %d: dropped %lu frames (slow client / WiFi)",
+                       slot, (unsigned long)dropped_tx);
+              last_drop_log = xTaskGetTickCount();
+            }
+          } else {
+            goto disconnect;
+          }
+        }
       }
     }
 
