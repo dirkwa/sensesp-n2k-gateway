@@ -168,30 +168,83 @@ void CandumpTcpServer::client_task(void* arg) {
   uint32_t dropped_tx = 0;
   TickType_t last_drop_log = 0;
 
+  // TX batching: pack many candump lines into a single send() to amortise
+  // TCP/IP + WiFi 802.11 overhead. Flushes on full buffer or 20ms timeout,
+  // whichever comes first. Drops the whole batch on EAGAIN (rare) to avoid
+  // blocking the candump task and stalling the SDIO drain.
+  //
+  // NOTE: buffer is heap-allocated, NOT on stack — the candump_cli task
+  // has a 4KB stack and a 2.5KB on-stack buffer overflows it (causes
+  // "Guru Meditation Error: Stack protection fault" within ~30s).
+  constexpr int kTxBufSize = 2560;       // ~50 candump lines per flush
+  constexpr int kFlushIntervalMs = 20;   // max latency added per line
+  static_assert(kTxBufSize >= 128, "must fit one max-length line");
+  char* tx_buf = static_cast<char*>(malloc(kTxBufSize));
+  if (!tx_buf) {
+    ESP_LOGE("candump_srv", "slot %d: failed to alloc TX buffer", slot);
+    close(sock);
+    // Clean up the queue + client-slot accounting like the disconnect path,
+    // then exit the task. Avoid `goto` past the lambda declaration below
+    // (would skip its initialization — C++ compile error).
+    if (xSemaphoreTake(self->clients_mutex_, pdMS_TO_TICKS(100)) == pdTRUE) {
+      if (self->client_queues_[slot]) {
+        vQueueDelete(self->client_queues_[slot]);
+        self->client_queues_[slot] = nullptr;
+      }
+      xSemaphoreGive(self->clients_mutex_);
+    }
+    self->connected_clients_.fetch_sub(1, std::memory_order_relaxed);
+    delete ctx;
+    vTaskDelete(nullptr);
+    return;  // unreachable; suppresses warning
+  }
+  int tx_len = 0;
+  TickType_t last_flush = xTaskGetTickCount();
+
+  auto flush_tx = [&]() -> bool {
+    if (tx_len == 0) return true;
+    int sent = send(sock, tx_buf, tx_len, MSG_NOSIGNAL);
+    if (sent < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        dropped_tx += tx_len;  // approximate: byte count, not frame count
+        if (xTaskGetTickCount() - last_drop_log >
+            pdMS_TO_TICKS(5000)) {
+          ESP_LOGW("candump_srv",
+                   "slot %d: dropped %lu bytes (slow client / WiFi)",
+                   slot, (unsigned long)dropped_tx);
+          last_drop_log = xTaskGetTickCount();
+        }
+        tx_len = 0;
+        last_flush = xTaskGetTickCount();
+        return true;
+      }
+      return false;
+    }
+    tx_len = 0;
+    last_flush = xTaskGetTickCount();
+    return true;
+  };
+
   while (self->running_.load()) {
-    // 1. Drain queued frames → send candump lines to client.
+    // 1. Drain queued frames → encode into batch buffer, flush when full.
     TwaiMessage msg;
     while (xQueueReceive(queue, &msg, 0) == pdTRUE) {
       int n = candump_encode(msg, self->config_.interface_name,
                              encode_buf, sizeof(encode_buf));
       if (n > 0) {
-        int sent = send(sock, encode_buf, n, MSG_NOSIGNAL);
-        if (sent < 0) {
-          if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            // TCP buffer full — drop this frame, keep client connected.
-            dropped_tx++;
-            if (xTaskGetTickCount() - last_drop_log >
-                pdMS_TO_TICKS(5000)) {
-              ESP_LOGW("candump_srv",
-                       "slot %d: dropped %lu frames (slow client / WiFi)",
-                       slot, (unsigned long)dropped_tx);
-              last_drop_log = xTaskGetTickCount();
-            }
-          } else {
-            goto disconnect;
-          }
+        if (tx_len + n > kTxBufSize) {
+          if (!flush_tx()) goto disconnect;
         }
+        memcpy(tx_buf + tx_len, encode_buf, n);
+        tx_len += n;
       }
+    }
+
+    // 2. Time-based flush so per-frame latency stays bounded even on a
+    //    quiet bus or a slow trickle.
+    if (tx_len > 0 &&
+        xTaskGetTickCount() - last_flush >= pdMS_TO_TICKS(kFlushIntervalMs)) {
+      if (!flush_tx()) goto disconnect;
     }
 
     // 2. Read inbound data from client (non-blocking, 50ms timeout).
@@ -223,6 +276,7 @@ void CandumpTcpServer::client_task(void* arg) {
 
 disconnect:
   ESP_LOGI(kTag, "Client disconnected (slot %d)", slot);
+  if (tx_buf) free(tx_buf);
   close(sock);
 
   // Free the per-client queue.
