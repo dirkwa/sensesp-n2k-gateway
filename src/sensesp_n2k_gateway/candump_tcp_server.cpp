@@ -2,9 +2,11 @@
 
 #include <cstring>
 
+#include "ESPmDNS.h"
 #include "esp_log.h"
 #include "lwip/sockets.h"
 
+#include "sensesp.h"
 #include "sensesp_n2k_gateway/candump_format.h"
 
 namespace sensesp {
@@ -51,6 +53,23 @@ void CandumpTcpServer::start() {
   xTaskCreate(&CandumpTcpServer::server_task, "candump_srv", 4096,
               this, 3, &server_task_);
   ESP_LOGI(kTag, "Candump TCP server starting on port %u", config_.port);
+
+  // Advertise via mDNS so canboatjs / SignalK Server can auto-discover the
+  // gateway on the LAN (works on both Ethernet and WiFi).
+  // Defer via onDelay(0) so the registration runs AFTER SensESP's
+  // MDNSDiscovery callback (also onDelay(0)) has called MDNS.begin() —
+  // calling addService before mdns_init() is a silent no-op.
+  uint16_t port = config_.port;
+  const char* iface = config_.interface_name;
+  event_loop()->onDelay(0, [port, iface]() {
+    MDNS.addService("sensesp-n2k", "tcp", port);
+    MDNS.addServiceTxt("sensesp-n2k", "tcp", "txtvers", "1");
+    MDNS.addServiceTxt("sensesp-n2k", "tcp", "format", "candump3");
+    MDNS.addServiceTxt("sensesp-n2k", "tcp", "iface", iface);
+    MDNS.addServiceTxt("sensesp-n2k", "tcp", "model", "sensesp-n2k-gateway");
+    ESP_LOGI(kTag, "Advertising mDNS service _sensesp-n2k._tcp on port %u",
+             port);
+  });
 }
 
 void CandumpTcpServer::stop() {
