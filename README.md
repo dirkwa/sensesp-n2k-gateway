@@ -132,3 +132,23 @@ auto* receiver = new TwaiReceiver({.tx_pin = GPIO_NUM_4, .rx_pin = GPIO_NUM_5});
 - SensESP >= 3.3.0
 - PlatformIO with `framework = espidf, arduino` (pioarduino)
 - signalk-server with the `N2kIpGateway` source (PR #2694 / canboatjs PR #437)
+
+## License
+
+sensesp-n2k-gateway 1.0.0 and later is **source available, not open source**.
+See [LICENSE.md](LICENSE.md).
+
+**You may**, free of charge: run it on your own boat or fleet, private or
+commercial; use it for internal company operations; modify it for your own use;
+use it in education and research; and provide professional services around it.
+
+**You may not**: redistribute it, or publish a modified version of it to the
+PlatformIO registry, the Arduino library index or anywhere else. Verbatim
+copies of official releases may be mirrored and cached.
+
+Versions 0.1.0 and earlier remain available under the Apache-2.0 license, see
+[LICENSE-Apache-2.0-through-v0.x.txt](LICENSE-Apache-2.0-through-v0.x.txt).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
