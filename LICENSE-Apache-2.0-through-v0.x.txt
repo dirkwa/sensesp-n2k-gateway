@@ -1,3 +1,7 @@
+This Apache-2.0 license applied to sensesp-n2k-gateway version 0.1.0 and all
+earlier releases. Those versions remain available under Apache-2.0 in
+perpetuity. Version 1.0.0 and later are licensed under the terms in LICENSE.md.
+
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
